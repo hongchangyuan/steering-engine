@@ -376,7 +376,7 @@ void user_init(void)
 	uart_init_new();
 	//PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO2_U,FUNC_GPIO2);//—°‘ÒGPIO2
 	//GPIO_DIS_OUTPUT(GPIO_ID_PIN(2)) ;
-	wifi_set_opmode(STATION_MODE);
+	//wifi_set_opmode(STATION_MODE);
 	wifi_station_set_auto_connect(TRUE);
 	wifi_set_event_handler_cb(wifi_handle_event_cb);
 	init_timer();
