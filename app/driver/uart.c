@@ -423,7 +423,7 @@ uart_init_new(void)
 
 	//下位机通讯串口设置：串口0
 	UART_ConfigTypeDef uart_config;
-	uart_config.baud_rate = BIT_RATE_4800; //波特率为9600
+	uart_config.baud_rate = BIT_RATE_4800; //波特率为4800
 	uart_config.data_bits = UART_WordLength_8b;
 	uart_config.parity = USART_Parity_None;
 	uart_config.stop_bits = USART_StopBits_1;
