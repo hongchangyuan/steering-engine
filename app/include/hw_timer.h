@@ -48,7 +48,11 @@ extern "C" {
   *
   * @return  null
   */
+#define REG_WRITE(_r,_v)    (*(volatile uint32 *)(_r)) = (_v)
+#define REG_READ(_r)        (*(volatile uint32 *)(_r))
+#define WDEV_NOW()          REG_READ(0x3ff20c00)
 void hw_timer_init(uint8 req);
+void hw_timer_cmd( uint8 cmd );
 
 /**
   * @brief   Set a trigger timer delay to enable this timer.

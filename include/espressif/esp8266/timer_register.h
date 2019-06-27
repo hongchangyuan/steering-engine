@@ -41,7 +41,7 @@
 #define FRC1_COUNT_DATA_LSB             0
 #define FRC1_COUNT_DATA_MASK            0x007fffff
 
-#define FRC1_CTRL_ADDRESS           (PERIPHS_TIMER_BASEDDR + 0x8)
+#define FRC1_CTRL_ADDRESS           (PERIPHS_TIMER_BASEDDR + 0x08)
 #define TIMER_FRC1_INT                  (BIT(8))
 #define TIMER_FRC1_CTRL                 0x000000FF
 #define TIMER_FRC1_CTRL_S               0

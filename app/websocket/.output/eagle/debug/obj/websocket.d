@@ -106,7 +106,7 @@
  /home/aithinker/project/ESP8266_RTOS_SDK/include/espressif/esp8266/uart_register.h \
  /home/aithinker/project/ESP8266_RTOS_SDK/include/espressif/smartconfig.h \
  /home/aithinker/project/ESP8266_RTOS_SDK/include/espressif/spi_flash.h \
- /home/aithinker/project/ESP8266_RTOS_SDK/include/espressif/pwm.h \
+ ../include/hw_timer.h \
  /home/aithinker/project/ESP8266_RTOS_SDK/include/lwip/apps/time.h \
  /home/aithinker/project/ESP8266_RTOS_SDK/include/espressif/esp8266/eagle_soc.h \
  /home/aithinker/project/ESP8266_RTOS_SDK/include/ssl/ssl_ssl.h \

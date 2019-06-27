@@ -61,6 +61,24 @@ void hw_timer_arm(uint32 val)
     RTC_REG_WRITE(FRC1_LOAD_ADDRESS, US_TO_RTC_TIMER_TICKS(val));
 }
 
+void hw_timer_cmd( uint8 cmd )
+{
+  uint32 ReadValue , Value;
+
+  ReadValue = READ_PERI_REG( FRC1_CTRL_ADDRESS );
+
+  if( cmd == 0 )
+  {
+    Value = ReadValue & ( ~FRC1_ENABLE_TIMER );
+  }
+  else
+  {
+   Value = ReadValue | FRC1_ENABLE_TIMER;
+  }
+
+  RTC_REG_WRITE( FRC1_CTRL_ADDRESS , Value );
+}
+
 void hw_timer_set_func(void (* user_hw_timer_cb_set)(void))
 {
     user_hw_timer_cb = user_hw_timer_cb_set;

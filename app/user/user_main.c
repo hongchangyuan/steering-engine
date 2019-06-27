@@ -38,16 +38,19 @@ static void tcp_server_discon_cb(void *arg);
 static void tcp_server_listen_cb(void *arg);
 
 BOOL bIsConnectRemote = FALSE;
+int breakcount = 0;
 
 char network_type = 2;
 int  count = 0;
+char cmd[9]={0};
+int  numUnReceive = 0;
 
 os_timer_t timer_led;
 os_timer_t timer_count;
-os_timer_t breakHeart;
+//os_timer_t breakHeart;
 os_timer_t timer_smartconfig;
 os_timer_t timer_sleep;
-os_timer_t timer_deep_sleep;
+
 struct espconn user_tcp_conn;
 struct espconn *pespconn;
 
@@ -203,37 +206,9 @@ void timer_led_callback()
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(2), 1);
 }
 
-void enter_deep_sleep()
-{
-	os_timer_disarm(&timer_led);
-	os_timer_disarm(&timer_count);
-	os_timer_disarm(&timer_smartconfig);
-	os_timer_disarm(&breakHeart);
-	os_timer_disarm(&timer_sleep);
-	system_deep_sleep(0);
-}
-
-void timer_sleep_callback()
-{
-	if(bIsConnectRemote)
-	{
-		espconn_sent(pespconn, "BB03=machine!", strlen("BB03=machine!"));
-	}
-	os_timer_disarm(&timer_sleep);
-	os_timer_disarm(&breakHeart);
-	wifi_set_sleep_type(LIGHT_SLEEP_T);
-	wifi_fpm_open();
-
-}
-
 void timer_count_callback()
 {
 	count++;
-}
-
-void timer_callback()
-{
-	espconn_sent(pespconn, "heart=machine!", strlen("heart=machine!"));
 }
 
 void ICACHE_FLASH_ATTR user_tcp_sent_cb(void *arg)  //发送
@@ -245,8 +220,7 @@ void ICACHE_FLASH_ATTR user_tcp_discon_cb(void *arg)  //断开
 {
 	os_printf("disconnect suceed!");
 	bIsConnectRemote = FALSE;
-	os_timer_disarm(&breakHeart);
-	os_timer_arm(&timer_deep_sleep, 90000, FALSE);
+
 	os_timer_arm(&timer_led, 1000, true);
 	espconn_connect((struct espconn *) arg);
 }
@@ -254,23 +228,23 @@ void ICACHE_FLASH_ATTR user_tcp_discon_cb(void *arg)  //断开
 void ICACHE_FLASH_ATTR user_tcp_recv_cb(void *arg,  //接收
 		char *pdata, unsigned short len) {
 
-	os_printf("recv：%s\r\n", pdata);
+    char DeviceBuffer[20]={0};
+
+    sprintf(DeviceBuffer,"success=%d!",len);
+
 	if(pdata[0] == 0xAA)
 	{
-		uart0_write_string(pdata,len);
-		os_timer_disarm(&timer_sleep);
-		os_timer_arm(&timer_sleep, 60000, true);
-		os_timer_arm(&breakHeart, 1000, TRUE);
+		numUnReceive = len%9;
+		memcpy(cmd,pdata,9);
+	    uart0_write_string(cmd,9);
+
+		breakcount = 0;
 	}
 	else if(pdata[0] == 0xBB)
 	{
         if(pdata[1] == 0x01)//wake up
         {
-        	wifi_fpm_close();
-        	os_timer_disarm(&breakHeart);
-        	os_timer_arm(&breakHeart, 1000, TRUE);
-        	os_timer_disarm(&timer_sleep);
-        	os_timer_arm(&timer_sleep, 60000, FALSE);
+        	bIsConnectRemote = TRUE;
         }
         else if(pdata[1] == 0x02)//clear
         {
@@ -280,28 +254,35 @@ void ICACHE_FLASH_ATTR user_tcp_recv_cb(void *arg,  //接收
         }
         else if(pdata[1] == 0x03)//sleep
         {
-        	os_timer_disarm(&breakHeart);
-        	wifi_set_sleep_type(LIGHT_SLEEP_T);
-        	wifi_fpm_open();
+
         }
+
+
+	}
+	else
+	{
+		uart0_write_string(cmd,9);
 	}
 
+	espconn_sent(arg, DeviceBuffer, strlen(DeviceBuffer));
 }
 
 void ICACHE_FLASH_ATTR user_tcp_recon_cb(void *arg, sint8 err) //注册 TCP 连接发生异常断开时的回调函数，可以在回调函数中进行重连
 {
 	os_printf("connect error %d\r\n", err);
+	os_timer_arm(&timer_led, 1000, true);
 }
 
 void ICACHE_FLASH_ATTR user_tcp_connect_cb(void *arg)  //注册 TCP 连接成功建立后的回调函数
 {
 	char yladdr[6];
 	char DeviceBuffer[40]={0};
-	int keep_alive = 6;
-	os_timer_disarm(&timer_deep_sleep);
+
+	int keep_alive = 3;
+
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(2), 0);
     pespconn = arg;
-    espconn_set_opt(arg, ESPCONN_KEEPALIVE);
+
 	espconn_regist_recvcb(arg, user_tcp_recv_cb);  //接收
 	espconn_regist_sentcb(arg, user_tcp_sent_cb);  //发送
 	espconn_regist_disconcb(arg, user_tcp_discon_cb);  //断开
@@ -309,6 +290,7 @@ void ICACHE_FLASH_ATTR user_tcp_connect_cb(void *arg)  //注册 TCP 连接成功建立后
 	sprintf(DeviceBuffer,MAC_STR",machine!",MAC2STR(yladdr));
 
 	espconn_sent(pespconn, DeviceBuffer, strlen(DeviceBuffer));
+
 	bIsConnectRemote = TRUE;
 	//keep alive checking per 30s
 
@@ -317,7 +299,7 @@ void ICACHE_FLASH_ATTR user_tcp_connect_cb(void *arg)  //注册 TCP 连接成功建立后
 	espconn_set_keepalive(arg, ESPCONN_KEEPINTVL, &keep_alive);
 	keep_alive = 2;//repeat 2times
 	espconn_set_keepalive(arg, ESPCONN_KEEPCNT, &keep_alive);
-	os_timer_arm(&breakHeart, 1000, TRUE);
+	espconn_set_opt(arg, ESPCONN_KEEPALIVE);
 }
 
 void ICACHE_FLASH_ATTR my_station_init(struct ip_addr *remote_ip,
@@ -340,9 +322,8 @@ void ICACHE_FLASH_ATTR my_station_init(struct ip_addr *remote_ip,
 void tcp_client_init()
 {
 	os_timer_disarm(&timer_led);//关闭定时器，相当于清零计时器计数
-	os_timer_arm(&timer_sleep, 60000, false);
 	struct ip_info info;//47, 97, 252, 149
-	const char remote_ip[4] = { 172, 16, 18, 2 };//目标IP地址,必须要先从手机获取，否则连接失败.
+	const char remote_ip[4] = { 192, 168, 1, 103 };//目标IP地址,必须要先从手机获取，否则连接失败.
 	wifi_get_ip_info(STATION_IF, &info);	//查询 WiFi模块的 IP 地址
 	my_station_init((struct ip_addr *) remote_ip, &info.ip, 1008);//连接到目标服务器的1008端口
 }
@@ -457,7 +438,6 @@ wifi_handle_event_cb(System_Event_t *evt)
 			os_printf("disconnect from ssid %s, reason %d\n",
 					evt->event_info.disconnected.ssid,
 					evt->event_info.disconnected.reason);
-			os_timer_arm(&timer_deep_sleep, 90000, FALSE);
 			break;
 		case EVENT_STAMODE_AUTHMODE_CHANGE:
 			os_printf("mode: %d -> %d\n",
@@ -466,7 +446,6 @@ wifi_handle_event_cb(System_Event_t *evt)
 			break;
 		case EVENT_STAMODE_GOT_IP:
 			os_printf("WIFI connect suceed\r\n");
-			os_timer_disarm(&timer_deep_sleep);
 			tcp_client_init();
 			break;
 		case EVENT_SOFTAPMODE_STACONNECTED:
@@ -490,14 +469,17 @@ void ICACHE_FLASH_ATTR
 smartconfig_task(void *pvParameters)
 {
 	network_type = 0;
+
 	if(bIsConnectRemote)
 	{
 		espconn_sent(pespconn, "BB02=machine!", strlen("BB02=machine!"));
+		os_delay_us(1000*30);
 	}
 
-	wifi_set_opmode(STATION_MODE);
 	wifi_station_set_auto_connect(FALSE);
 	wifi_station_disconnect();
+	wifi_set_opmode(STATION_MODE);
+
 	smartconfig_stop();
     smartconfig_start(smartconfig_done);
     os_timer_disarm(&timer_led);//关闭定时器，相当于清零计时器计数
@@ -554,22 +536,12 @@ void init_timer()
 	os_timer_setfn(&timer_led, (os_timer_func_t *)timer_led_callback, NULL);//初始化定时器
 	os_timer_arm(&timer_led, 3000, TRUE);
 
-
-	os_timer_disarm(&timer_deep_sleep);//关闭定时器，相当于清零计时器计数
-	os_timer_setfn(&timer_deep_sleep, (os_timer_func_t *)enter_deep_sleep, NULL);//初始化定时器
-	os_timer_arm(&timer_deep_sleep, 90000, FALSE);
-
-	os_timer_disarm(&timer_sleep);
-	os_timer_setfn(&timer_sleep, (os_timer_func_t *)timer_sleep_callback, NULL);//初始化定时器
-
 	os_timer_disarm(&timer_count);//关闭定时器，相当于清零计时器计数
 	os_timer_setfn(&timer_count, (os_timer_func_t *)timer_count_callback, NULL);//初始化定时器
 
 	os_timer_disarm(&timer_smartconfig);//关闭定时器，相当于清零计时器计数
 	os_timer_setfn(&timer_smartconfig, (os_timer_func_t *)stop_smartconfig, NULL);//初始化定时器
 
-	os_timer_disarm(&breakHeart);//关闭定时器，相当于清零计时器计数
-	os_timer_setfn(&breakHeart, (os_timer_func_t *)timer_callback, NULL);//初始化定时器
 }
 
 void init_key()
@@ -593,14 +565,18 @@ void init_key()
  * Parameters   : none
  * Returns      : none
 *******************************************************************************/
-void user_init(void)
+void ICACHE_FLASH_ATTR user_init(void)
 {
 	uart_init_new();
 	bIsConnectRemote = FALSE;
+
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO2_U,FUNC_GPIO2);//选择GPIO2
 	GPIO_DIS_OUTPUT(GPIO_ID_PIN(2));
+	wifi_set_sleep_type(LIGHT_SLEEP_T);
 	wifi_set_event_handler_cb(wifi_handle_event_cb);
-	init_timer();
 	init_key();
+	init_timer();
+
 	espconn_init();
+
 }

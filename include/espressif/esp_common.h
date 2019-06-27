@@ -104,5 +104,6 @@
 #include "esp8266/esp8266.h"
 #include "smartconfig.h"
 #include "spi_flash.h"
-#include "pwm.h"
+//#include "pwm.h"
+#include "hw_timer.h"
 #endif
