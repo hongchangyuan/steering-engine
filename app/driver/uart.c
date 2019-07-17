@@ -40,7 +40,7 @@ typedef struct _os_event_ {
     uint32 param;
 } os_event_t;
 
-extern void send_msg_to_server(uint8 *psent,uint16 length);
+//extern void send_msg_to_server(uint8 *psent,uint16 length);
 xTaskHandle xUartTaskHandle;
 xQueueHandle xQueueUart;
 
@@ -411,7 +411,7 @@ uart0_rx_intr_handler(void *para)
         }
 
         uart_intr_status = READ_PERI_REG(UART_INT_ST(uart_no)) ;
-        send_msg_to_server(fifo_tmp,strlen(fifo_tmp));
+        //send_msg_to_server(fifo_tmp,strlen(fifo_tmp));
     }
 }
 
@@ -423,7 +423,7 @@ uart_init_new(void)
 
 	//下位机通讯串口设置：串口0
 	UART_ConfigTypeDef uart_config;
-	uart_config.baud_rate = BIT_RATE_4800; //波特率为4800
+	uart_config.baud_rate = BIT_RATE_9600; //波特率为4800
 	uart_config.data_bits = UART_WordLength_8b;
 	uart_config.parity = USART_Parity_None;
 	uart_config.stop_bits = USART_StopBits_1;

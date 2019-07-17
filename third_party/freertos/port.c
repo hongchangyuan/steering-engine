@@ -276,6 +276,7 @@ void vPortEnterCritical( void )
 			if( ClosedLv1Isr !=1 )
 			{
 				portDISABLE_INTERRUPTS();
+				//PortDisableInt_NoNest();
 				ClosedLv1Isr = 1;
 			}
 			//tick_lock = WDEV_NOW();
@@ -298,6 +299,7 @@ void vPortExitCritical( void )
 				{
 					ClosedLv1Isr = 0;
 					portENABLE_INTERRUPTS();
+					//PortEnableInt_NoNest();
 				}
 			}
 		}		
