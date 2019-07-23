@@ -25,23 +25,14 @@
 #include "esp_common.h"
 #include "../include/gpio.h"
 #include "espressif/espconn.h"
-/****************************
-*   TCP SERVER FUNCTIONS   *
-****************************/
-/**********************************
-*  TCP SERVER STATIC PROTOTYPES  *
-**********************************/
-//static void tcp_server_sent_cb(void *arg);
-//static void tcp_server_recv_cb(void *arg,char *pdata,unsigned short length);
-//static void tcp_server_recon_cb(void *arg,sint8 error);
-//static void tcp_server_discon_cb(void *arg);
-//static void tcp_server_listen_cb(void *arg);
+
 typedef enum {
 	timer_invalid = -1,
     timer_wait_config,
 	timer_smartconfiging,
 	timer_wifi_error,
 	timer_server_error,
+	timer_server_normal_but_no_listen,
 	timer_stop
 } LED_STATUS;
 
@@ -59,125 +50,6 @@ os_timer_t timer_task;
 
 struct espconn user_tcp_conn;
 struct espconn *pespconn;
-
-/**********************************
- *   TCP SERVER STATIC VARIABLES  *
-**********************************/
-//os_timer_t tcp_server_send_data_timer;
-//struct espconn tcp_server;
-//uint8 z;
-
- /**********************************
-  *   TCP server STATIC FUNCTIONS  *
-  **********************************/
-
- /**
-  * TCP Server数据发送回调函数
-  */
-// static void ICACHE_FLASH_ATTR
-// tcp_server_sent_cb(void *arg){
-//     os_printf("tcp server send data successful\r\n");
-//
-// }
-
- /**
-  * TCP Server数据接收回调函数，可以在这处理收到Client发来的数据
-  */
-// static void ICACHE_FLASH_ATTR
-// tcp_server_recv_cb(void *arg,char *pdata,unsigned short len){
-//	 int i;
-//
-//     os_printf("length: %d \r\ndata: %s\r\n",len,pdata);
-//
-//     struct station_config data;
-//     data.bssid_set = 0;
-//     for(i = 0;i < len;i++)
-//     {
-//    	 if(pdata[i] == '=')
-//    	 {
-//    		 break;
-//    	 }
-//     }
-//
-//     memset(data.bssid,0,sizeof(data.bssid));
-//     memset(data.password,0,sizeof(data.password));
-//     memcpy(data.bssid,pdata,i);
-//     memcpy(data.password,pdata+i+1,len-i-1);
-//     espconn_send(arg,"get wifiname",12);
-////     wifi_set_opmode(STATION_MODE);
-////     wifi_station_set_auto_connect(true);
-////     wifi_station_set_config(&data);
-// }
-
- /**
-  * TCP Server重连回调函数，可以在此函数里做重连接处理
-  */
-// static void ICACHE_FLASH_ATTR
-// tcp_server_recon_cb(void *arg,sint8 error){
-//     os_printf("tcp server connect tcp client error %d\r\n",error);
-//     os_timer_disarm(&tcp_server_send_data_timer);
-// }
-
- /**
-  * TCP Server断开连接回调函数
-  */
-// static void ICACHE_FLASH_ATTR
-// tcp_server_discon_cb(void *arg){
-//     os_printf("tcp server disconnect tcp client successful\r\n");
-//     os_timer_disarm(&tcp_server_send_data_timer);
-// }
-
- /**
-  * TCP Server监听Client连接回调函数
-  */
-// static void ICACHE_FLASH_ATTR
-// tcp_server_listen_cb(void *arg){
-//     struct espconn *pespconn = arg;
-//
-//     os_printf("tcp server have tcp client connect\r\n");
-//     espconn_regist_recvcb(pespconn,tcp_server_recv_cb);//注册收到数据回调函数
-//     espconn_regist_sentcb(pespconn,tcp_server_sent_cb);//注册发送完数据回调函数
-//     espconn_regist_disconcb(pespconn,tcp_server_discon_cb);//注册断开连接回调函数
-//
-//     os_timer_disarm(&tcp_server_send_data_timer);
-//     //os_timer_setfn(&tcp_server_send_data_timer, (os_timer_func_t *) tcp_server_send_data,NULL);//注册Server定时发送数据回调函数
-//     os_timer_arm(&tcp_server_send_data_timer, 1000, true);//设置时间为1s
-// }
-
- /**********************************
-  *   TCP CLIENT GLOBAL FUNCTIONS  *
-  **********************************/
-
- /**
-  * TCP Server定时发送数据回调函数
-  */
-// void ICACHE_FLASH_ATTR
-// tcp_server_send_data(void){
-//     char buf[256],length;
-//     os_printf("tcp server send data tcp client\r\n");
-//     length = sprintf(buf,(char *)"Hi this is ESP8266 server! message num %d",z);
-//     z++;
-//     espconn_send(&tcp_server,buf,length);
-// }
-
- /**
-  * TCP Server初始化函数
-  * @local_port 本地监听端口号，与Client连接的端口号一致
-  */
-// void ICACHE_FLASH_ATTR
-// tcp_server_init(uint16 local_port){
-//
-//     os_printf("tcp server waiting tcp client connect!\r\n");
-//     tcp_server.proto.tcp = (esp_tcp *)os_zalloc(sizeof(esp_tcp));
-//     tcp_server.type = ESPCONN_TCP;
-//     tcp_server.proto.tcp->local_port = local_port;//设置本地监听的端口号，等待Client连接
-//
-//     espconn_regist_connectcb(&tcp_server,tcp_server_listen_cb);//注册Server监听回调函数
-//     espconn_regist_reconcb(&tcp_server,tcp_server_recon_cb);//注册断连重新连接回调函数
-//
-//     espconn_accept(&tcp_server);//创建Server,开始监听
-//     espconn_regist_time(&tcp_server,360,0);//超时断开连接时间
-//}
 
 void change_timer_task(LED_STATUS led_status_para,int nSec)
 {
@@ -198,12 +70,11 @@ void timer_task_callback()
     		 bIsNeedToConnect = FALSE;
     		 if(bIsConnectRemote)
     		 {
-    			 //while(espconn_sent(pespconn, "BB02=machine!", strlen("BB02=machine!")) != 0);
-    			 espconn_sent(pespconn, "BB02=machine!", strlen("BB02=machine!"));
+    			 espconn_sent(&user_tcp_conn, "BB02=machine!", strlen("BB02=machine!"));
     			 struct station_config data;
     			 wifi_station_set_config(&data);
-    			 os_delay_us(20*1000);
-    			 espconn_disconnect(pespconn);
+    			 os_delay_us(50*1000);
+    			 espconn_disconnect(&user_tcp_conn);
     		 }
     		 change_timer_task(timer_smartconfiging,300);
     		 return;
@@ -215,11 +86,11 @@ void timer_task_callback()
     		 bIsNeedToConnect = FALSE;
     		 if(bIsConnectRemote)
     		 {
-    			 while(espconn_sent(pespconn, "BB02=machine!", strlen("BB02=machine!")) != 0);
+    			 espconn_sent(&user_tcp_conn, "BB02=machine!", strlen("BB02=machine!"));
     			 struct station_config data;
     			 wifi_station_set_config(&data);
-    			 os_delay_us(20*1000);
-    			 espconn_disconnect(pespconn);
+    			 os_delay_us(50*1000);
+    			 espconn_disconnect(&user_tcp_conn);
     		 }
     		 change_timer_task(timer_smartconfiging,300);
     		 return;
@@ -263,6 +134,9 @@ void timer_task_callback()
     	 }
 
     	 break;
+     case timer_server_normal_but_no_listen:
+    	 system_restart();
+    	 break;
      default:
     	 break;
      }
@@ -270,18 +144,7 @@ void timer_task_callback()
 
 
 extern void uart0_write_string(char *pdata, unsigned short len);
-//void send_msg_to_server(uint8 *psent,uint16 length)
-//{
-//	uint8 returnCode = espconn_sent(pespconn, psent, length);
-//	if(returnCode == 0)
-//	{
-//        //portDISABLE_INTERRUPTS();
-//	}
-//	else if(returnCode == ESPCONN_ARG)
-//	{
-//		espconn_connect(&user_tcp_conn);
-//	}
-//}
+
 
 void timer_led_callback()
 {
@@ -303,7 +166,8 @@ void ICACHE_FLASH_ATTR user_tcp_discon_cb(void *arg)  //断开
 	//如果是按配网断开的就不要重新连接了
 	if(bIsNeedToConnect)
 	{
-		espconn_connect((struct espconn *) arg);
+		//espconn_connect((struct espconn *) arg);
+		espconn_connect(&user_tcp_conn);
 	}
 
 }
@@ -344,7 +208,8 @@ void ICACHE_FLASH_ATTR user_tcp_recv_cb(void *arg,  //接收
 		uart0_write_string(cmd,4);
 	}
 
-	espconn_sent(arg, DeviceBuffer, strlen(DeviceBuffer));
+	espconn_sent(&user_tcp_conn, DeviceBuffer, strlen(DeviceBuffer));
+	change_timer_task(timer_server_normal_but_no_listen,1000*15);
 }
 
 void ICACHE_FLASH_ATTR user_tcp_recon_cb(void *arg, sint8 err) //注册 TCP 连接发生异常断开时的回调函数，可以在回调函数中进行重连
@@ -559,18 +424,6 @@ smartconfig_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-//void ICACHE_FLASH_ATTR
-//APConfig_task(void *pvParameters)
-//{
-////	network_type = 1;
-////	smartconfig_stop();
-////    os_timer_disarm(&timer_led);//关闭定时器，相当于清零计时器计数
-////    os_timer_arm(&timer_led, 2000, TRUE);
-////    wifi_set_opmode(STATIONAP_MODE);
-////    tcp_server_init(8080);
-////    vTaskDelete(NULL);
-//}
-
 static void gpio_intr_handler()
 {
 	_xt_isr_mask(1<<ETS_GPIO_INUM);    //disable interrupt
@@ -638,6 +491,15 @@ void init_key()
 	_xt_isr_unmask(1 << ETS_GPIO_INUM);    //Enable the GPIO interrupt
 }
 
+void waitPowerStabilization()
+{
+	int nCountTime;
+	for(nCountTime = 0;nCountTime < 500;nCountTime++)
+	{
+        os_delay_us(2*3*1000);
+	}
+}
+
 
 /******************************************************************************
  * FunctionName : user_init
@@ -647,6 +509,7 @@ void init_key()
 *******************************************************************************/
 void ICACHE_FLASH_ATTR user_init(void)
 {
+	waitPowerStabilization();
 	uart_init_new();
 
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO2_U,FUNC_GPIO2);//选择GPIO2
